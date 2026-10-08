@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Home Assistant</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 14px; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #202124; color: #f1f3f4; font-size: 13px; }
+    .row { margin-bottom: 12px; }
+    label { display: block; margin-bottom: 5px; font-weight: 600; }
+    input, select, textarea { width: 100%; padding: 8px 9px; border: 1px solid #5f6368; border-radius: 6px; background: #303134; color: #f1f3f4; outline: none; }
+    textarea { min-height: 92px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    input:focus, select:focus, textarea:focus { border-color: #8ab4f8; }
+    .hint { margin-top: 5px; color: #bdc1c6; font-size: 11px; line-height: 1.35; }
+    .title { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+    .note { padding: 9px; border-radius: 6px; background: #2a2b2e; color: #d7dadc; line-height: 1.4; }
+    .hidden { display: none; }
+    .check { display: flex; align-items: center; gap: 8px; }
+    .check input { width: auto; }
+  </style>
+  <script>
+    let socket, context, action, settings = {}, saveTimer;
+
+    function connectOpenActionSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
+      const actionInfo = JSON.parse(inActionInfo);
+      context = actionInfo.context;
+      action = actionInfo.action;
+      settings = actionInfo.payload.settings || {};
+      socket = new WebSocket("ws://localhost:" + inPort);
+      socket.onopen = () => {
+        socket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
+        fillForm();
+      };
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.event === "didReceiveSettings") {
+          settings = data.payload.settings || {};
+          fillForm();
+        }
+      };
+    }
+    const connectElgatoStreamDeckSocket = connectOpenActionSocket;
+    function isEntity() { return action === "de.spliter90.homeassistant.entity"; }
+    function preset() { return document.getElementById("preset").value; }
+
+    function updateServiceUi() {
+      if (isEntity()) return;
+      const manual = preset() === "manual";
+      document.getElementById("manualServiceFields").classList.toggle("hidden", !manual);
+      document.getElementById("presetTargetFields").classList.toggle("hidden", manual);
+      document.getElementById("automationOptions").classList.toggle("hidden", preset() !== "automation");
+      const p = preset();
+      const ph = p === "scene" ? "scene.fernsehabend" : p === "script" ? "script.gute_nacht" : "automation.abendroutine";
+      document.getElementById("target_entity_id").placeholder = ph;
+    }
+
+    function fillForm() {
+      document.getElementById("entityFields").classList.toggle("hidden", !isEntity());
+      document.getElementById("serviceFields").classList.toggle("hidden", isEntity());
+      document.getElementById("base_url").value = settings.base_url || "http://homeassistant.local:8123";
+      document.getElementById("token").value = settings.token || "";
+      if (isEntity()) {
+        document.getElementById("entity_id").value = settings.entity_id || "";
+        document.getElementById("press_action").value = settings.press_action || "toggle";
+        document.getElementById("display_attribute").value = settings.display_attribute || "";
+        document.getElementById("label").value = settings.label || "";
+        document.getElementById("entity_icon").value = settings.icon || "auto";
+      } else {
+        document.getElementById("preset").value = settings.preset || "manual";
+        document.getElementById("target_entity_id").value = settings.target_entity_id || "";
+        document.getElementById("domain").value = settings.domain || "";
+        document.getElementById("service").value = settings.service || "";
+        document.getElementById("service_data").value = settings.service_data || "{}";
+        document.getElementById("service_label").value = settings.label || "HA ACTION";
+        document.getElementById("service_icon").value = settings.icon || "auto";
+        document.getElementById("automation_skip_condition").checked = settings.automation_skip_condition !== false;
+        updateServiceUi();
+      }
+    }
+
+    function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 250); }
+    function presetChanged() { updateServiceUi(); scheduleSave(); }
+
+    function save() {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      const common = {
+        base_url: document.getElementById("base_url").value.trim(),
+        token: document.getElementById("token").value.trim()
+      };
+      settings = isEntity() ? {
+        ...common,
+        entity_id: document.getElementById("entity_id").value.trim(),
+        press_action: document.getElementById("press_action").value,
+        display_attribute: document.getElementById("display_attribute").value.trim(),
+        label: document.getElementById("label").value.trim(),
+        icon: document.getElementById("entity_icon").value
+      } : {
+        ...common,
+        preset: document.getElementById("preset").value,
+        target_entity_id: document.getElementById("target_entity_id").value.trim(),
+        domain: document.getElementById("domain").value.trim(),
+        service: document.getElementById("service").value.trim(),
+        service_data: document.getElementById("service_data").value.trim() || "{}",
+        label: document.getElementById("service_label").value.trim(),
+        icon: document.getElementById("service_icon").value,
+        automation_skip_condition: document.getElementById("automation_skip_condition").checked
+      };
+      socket.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
+    }
+  </script>
+</head>
+<body>
+  <div class="title">Home Assistant</div>
+  <div class="row">
+    <label for="base_url">Home-Assistant-URL</label>
+    <input id="base_url" placeholder="http://homeassistant.local:8123" oninput="scheduleSave()" />
+  </div>
+  <div class="row">
+    <label for="token">Long-Lived Access Token</label>
+    <input id="token" type="password" autocomplete="off" placeholder="eyJ..." oninput="scheduleSave()" />
+    <div class="hint">Home Assistant → Benutzerprofil → Long-Lived Access Tokens. Der Token wird nicht ins Plugin-Log geschrieben.</div>
+  </div>
+
+  <div id="entityFields">
+    <div class="row">
+      <label for="entity_id">Entity ID</label>
+      <input id="entity_id" placeholder="light.wohnzimmer" oninput="scheduleSave()" />
+    </div>
+    <div class="row">
+      <label for="press_action">Tastendruck</label>
+      <select id="press_action" onchange="scheduleSave()">
+        <option value="toggle">Umschalten</option>
+        <option value="turn_on">Einschalten</option>
+        <option value="turn_off">Ausschalten</option>
+        <option value="none">Nur anzeigen</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="entity_icon">Symbol</label>
+      <select id="entity_icon" onchange="scheduleSave()">
+        <option value="auto">Automatisch</option>
+        <option value="bulb">Glühbirne</option>
+        <option value="ceiling">Deckenlampe</option>
+        <option value="pendant">Pendelleuchte</option>
+        <option value="desk">Tischlampe</option>
+        <option value="floor">Stehlampe</option>
+        <option value="spot">Spot / Strahler</option>
+        <option value="strip">LED-Strip</option>
+        <option value="outdoor">Außenleuchte</option>
+        <option value="switch">Schalter</option>
+        <option value="sensor">Sensor</option>
+        <option value="climate">Klima / Heizung</option>
+        <option value="house">Haus</option>
+      </select>
+      <div class="hint">Bei „Automatisch“ wird z. B. für light.* die Glühbirne verwendet.</div>
+    </div>
+    <div class="row">
+      <label for="display_attribute">Attribut anzeigen (optional)</label>
+      <input id="display_attribute" placeholder="current_temperature" oninput="scheduleSave()" />
+      <div class="hint">Leer = normaler Entity-State. Beispiel: current_temperature, brightness, battery_level.</div>
+    </div>
+    <div class="row">
+      <label for="label">Beschriftung (optional)</label>
+      <input id="label" placeholder="Wohnzimmer" oninput="scheduleSave()" />
+    </div>
+  </div>
+
+  <div id="serviceFields" class="hidden">
+    <div class="row">
+      <label for="preset">Aktionstyp</label>
+      <select id="preset" onchange="presetChanged()">
+        <option value="manual">Freie HA-Action / Service</option>
+        <option value="scene">Szene starten</option>
+        <option value="script">Script / Routine starten</option>
+        <option value="automation">Automation auslösen</option>
+      </select>
+    </div>
+
+    <div id="presetTargetFields" class="hidden">
+      <div class="row">
+        <label for="target_entity_id">Ziel-Entity</label>
+        <input id="target_entity_id" placeholder="script.gute_nacht" oninput="scheduleSave()" />
+      </div>
+      <div id="automationOptions" class="row hidden">
+        <label class="check"><input id="automation_skip_condition" type="checkbox" onchange="scheduleSave()" /> Bedingungen überspringen</label>
+        <div class="hint">Home Assistant überspringt beim manuellen Trigger standardmäßig die Bedingungen. Ausschalten = Bedingungen vorher prüfen.</div>
+      </div>
+    </div>
+
+    <div id="manualServiceFields">
+      <div class="row">
+        <label for="domain">Domain</label>
+        <input id="domain" placeholder="light" oninput="scheduleSave()" />
+      </div>
+      <div class="row">
+        <label for="service">Action / Service</label>
+        <input id="service" placeholder="turn_on" oninput="scheduleSave()" />
+      </div>
+      <div class="row">
+        <label for="service_data">Daten als JSON</label>
+        <textarea id="service_data" oninput="scheduleSave()">{}</textarea>
+        <div class="hint">Beispiel: {&quot;entity_id&quot;:&quot;light.wohnzimmer&quot;,&quot;brightness_pct&quot;:35}.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="service_icon">Symbol</label>
+      <select id="service_icon" onchange="scheduleSave()">
+        <option value="auto">Automatisch passend zur Aktion</option>
+        <option value="play">Start / Play</option>
+        <option value="scene">Szene</option>
+        <option value="routine">Routine / Script</option>
+        <option value="automation">Automation</option>
+        <option value="bulb">Glühbirne</option>
+        <option value="ceiling">Deckenlampe</option>
+        <option value="pendant">Pendelleuchte</option>
+        <option value="floor">Stehlampe</option>
+        <option value="strip">LED-Strip</option>
+        <option value="house">Haus</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="service_label">Tastenbeschriftung</label>
+      <input id="service_label" placeholder="Gute Nacht" oninput="scheduleSave()" />
+    </div>
+  </div>
+
+  <div class="note">Licht- und Entity-Status kommen live über <b>/api/websocket</b>. Szenen, Scripts/Routinen und Automationen werden direkt über Home Assistant ausgelöst.</div>
+</body>
+</html>
