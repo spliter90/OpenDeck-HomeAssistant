@@ -1,0 +1,46 @@
+{
+  "Name": "Home Assistant",
+  "Description": "Home-Assistant-Entitäten in OpenDeck anzeigen und steuern sowie beliebige HA-Actions/Services auslösen.",
+  "Author": "spliter90",
+  "Version": "0.2.0",
+  "Category": "Home Assistant",
+  "Icon": "icon",
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" },
+    { "Platform": "mac", "MinimumVersion": "10.15" },
+    { "Platform": "linux" }
+  ],
+  "CodePaths": {
+    "x86_64-pc-windows-msvc": "opendeck-homeassistant-x86_64-pc-windows-msvc.exe",
+    "x86_64-apple-darwin": "opendeck-homeassistant-x86_64-apple-darwin",
+    "aarch64-apple-darwin": "opendeck-homeassistant-aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu": "opendeck-homeassistant-x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu": "opendeck-homeassistant-aarch64-unknown-linux-gnu"
+  },
+  "CodePathWin": "opendeck-homeassistant-x86_64-pc-windows-msvc.exe",
+  "CodePathMac": "opendeck-homeassistant-x86_64-apple-darwin",
+  "CodePathLin": "opendeck-homeassistant-x86_64-unknown-linux-gnu",
+  "PropertyInspectorPath": "pi.html",
+  "Actions": [
+    {
+      "UUID": "de.spliter90.homeassistant.entity",
+      "Name": "Entity",
+      "Icon": "action",
+      "Tooltip": "Entity-Status live anzeigen; optional umschalten, einschalten oder ausschalten",
+      "Controllers": ["Keypad"],
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "pi.html",
+      "States": [{ "Image": "action", "Title": "HA\nENTITY" }]
+    },
+    {
+      "UUID": "de.spliter90.homeassistant.service",
+      "Name": "Action / Service",
+      "Icon": "action",
+      "Tooltip": "Beliebige Home-Assistant-Action bzw. Service mit JSON-Daten auslösen",
+      "Controllers": ["Keypad"],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "pi.html",
+      "States": [{ "Image": "action", "Title": "HA\nACTION" }]
+    }
+  ]
+}
