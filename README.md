@@ -30,6 +30,7 @@ OpenAction/OpenDeck plugin for Home Assistant. It shows live Home Assistant enti
 - `sensor.wohnzimmer_temperatur` + **Nur anzeigen**
 - `climate.wohnzimmer` + attribute `current_temperature`
 
+
 ### Scene, routine and automation presets
 
 The **Action / Service** key now has presets, so no JSON is required for common workflows:
