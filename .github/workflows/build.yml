@@ -1,0 +1,69 @@
+name: Build OpenDeck Home Assistant Plugin
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Test
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: cargo test
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Assemble plugin (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLUGIN="de.spliter90.homeassistant.sdPlugin"
+          mkdir -p "dist/$PLUGIN"
+          cp -R assets/* "dist/$PLUGIN/"
+          cp "target/${{ matrix.target }}/release/opendeck-homeassistant" "dist/$PLUGIN/opendeck-homeassistant-${{ matrix.target }}"
+          chmod +x "dist/$PLUGIN/opendeck-homeassistant-${{ matrix.target }}"
+          (cd dist && zip -r "../opendeck-homeassistant-${{ matrix.target }}.zip" "$PLUGIN")
+
+      - name: Assemble plugin (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $plugin = "de.spliter90.homeassistant.sdPlugin"
+          New-Item -ItemType Directory -Force -Path "dist/$plugin" | Out-Null
+          Copy-Item -Recurse "assets/*" "dist/$plugin/"
+          Copy-Item "target/${{ matrix.target }}/release/opendeck-homeassistant.exe" "dist/$plugin/opendeck-homeassistant-${{ matrix.target }}.exe"
+          Compress-Archive -Path "dist/$plugin" -DestinationPath "opendeck-homeassistant-${{ matrix.target }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendeck-homeassistant-${{ matrix.target }}
+          path: opendeck-homeassistant-${{ matrix.target }}.zip
